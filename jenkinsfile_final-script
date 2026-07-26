@@ -1,0 +1,87 @@
+pipeline {
+    agent any
+
+    tools {
+        maven 'maven-3.9'
+    }
+
+    stages {
+
+        stage('CheckOut') {
+            steps {
+                echo 'Cloning GitHub Repo'
+                git branch: 'main',
+                    url: 'https://github.com/Vamshi420/mindcircuit17d.git'
+            }
+        }
+
+        stage('SonarQube Scan') {
+            steps {
+                echo 'Scanning project'
+                sh 'ls -ltr'
+
+                sh '''
+                    mvn clean verify org.sonarsource.scanner.maven:sonar-maven-plugin:5.1.0.4751:sonar \
+                    -Dsonar.host.url=http://15.206.212.203:9000 \
+                    -Dsonar.login=squ_b18b83d5ef1a82d603c2caec51d261140365dfab
+                '''
+            }
+        }
+
+        stage('Build Artifact') {
+            steps {
+                echo 'Building Artifact'
+                sh 'mvn clean package'
+            }
+        }
+
+        stage('Docker Image') {
+            steps {
+                echo 'Building Docker Image'
+                sh 'docker build -t vamshi567/my-project:${BUILD_NUMBER} .'
+            }
+        }
+
+        stage('Push to DockerHub') {
+            steps {
+                script {
+                    withCredentials([string(credentialsId: 'dockerhub', variable: 'DOCKERHUB_TOKEN')]) {
+
+                        sh '''
+                            docker login -u vamshi567 -p ${DOCKERHUB_TOKEN}
+                            docker push vamshi567/my-project:${BUILD_NUMBER}
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('Update Deployment File') {
+
+            environment {
+                GIT_REPO_NAME = "mindcircuit17d"
+                GIT_USER_NAME = "Vamshi420"
+            }
+
+            steps {
+                echo 'Update Deployment File'
+
+                withCredentials([string(credentialsId: 'githubtoken', variable: 'githubtoken')]) {
+
+                    sh '''
+                        git config user.email "patelvamshimi@gmail.com"
+                        git config user.name "vamshi"
+
+                        sed -i "s/batch17d:.*/batch1713:${BUILD_NUMBER}/g" deploymentfiles/deploy.yaml
+
+                        git add deploymentfiles/deploy.yaml
+
+                        git commit -m "Update deployment image to version ${BUILD_NUMBER}"
+
+                        git push https://${githubtoken}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME}.git HEAD:main
+                    '''
+                }
+            }
+        }
+    }
+}
