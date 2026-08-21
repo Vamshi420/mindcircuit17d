@@ -1,29 +1,32 @@
-
----
 apiVersion: apps/v1
-kind: Deployment 
+kind: Deployment
 metadata:
-  name: fb-deploy
-  labels:
-    app: fb-app
-    env: prod
+  name: vamshi-project
 spec:
   replicas: 2
- 
   selector:
     matchLabels:
-      app: fb-app
-      env: prod
+      app: vamshi-project
   template:
-    metadata: 
+    metadata:
       labels:
-        app: fb-app
-        env: prod
-        version: v2_vc
-
+        app: vamshi-project
     spec:
-      containers: 
-      - name: facebook-container
-        image: vamshi567/vamshi-project:18
-        ports:
-        - containerPort: 8080
+      containers:
+        - name: vamshi-project
+          image: vamshi567/vamshi-project:12
+          ports:
+            - containerPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vamshi-project-service
+spec:
+  type: NodePort
+  selector:
+    app: vamshi-project
+  ports:
+    - port: 8080
+      targetPort: 8080
+      nodePort: 30080
