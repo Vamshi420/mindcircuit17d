@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: vamshi-project
-          image: vamshi567/vamshi-project:24
+          image: vamshi567/vamshi-project:25
           ports:
             - containerPort: 8080
 ---
