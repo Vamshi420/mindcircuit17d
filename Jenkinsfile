@@ -1,29 +1,97 @@
 pipeline {
     agent any
 
+    tools {
+        maven 'maven3'
+    }
+
     stages {
-	
-        stage('checkout') {
+
+        stage('Git Checkout') {
             steps {
-                echo 'git checkout stage'
-				git branch: 'main', url: 'https://github.com/devopstraininghub/mindcircuit17d.git'
+                echo 'Checking out source code...'
+
+                git(
+                    branch: 'main',
+                    url: 'https://github.com/Vamshi420/mindcircuit17d.git'
+                )
             }
         }
 
-        stage('build') {
+        stage('Build Artifact') {
             steps {
-                echo 'Building with maven '
-				sh 'mvn clean install '
+                echo 'Building Maven artifact...'
+
+                sh 'mvn clean package'
             }
         }
 
-        stage('Deploy') {
+        stage('SonarQube Scan') {
             steps {
-                echo 'Deploying to tomcat'
-				deploy adapters: [tomcat9(alternativeDeploymentContext: '', credentialsId: 'tomcat', path: '', url: 'http://54.160.144.88:8081/')], contextPath: 'insta', war: '**/*.war'
-				
+                echo 'Starting SonarQube analysis...'
+
+                withSonarQubeEnv(
+                    installationName: 'SonarQube',
+                    credentialsId: 'sonarqube'
+                ) {
+                    sh '''
+                        mvn verify \
+                        org.sonarsource.scanner.maven:sonar-maven-plugin:5.1.0.4751:sonar
+                    '''
+                }
             }
-        }		
-		
+        }
+
+        stage('SonarQube Quality Gate') {
+            steps {
+                echo 'Waiting for SonarQube Quality Gate...'
+
+                timeout(time: 10, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
+            }
+        }
+        stage('BUILD DOCKER IMAGE') {
+            steps {
+                echo 'Docker Image'
+
+                sh '''
+                    docker build -t vamshi567/wipro-project:${BUILD_NUMBER} .
+                '''
+            }
+        }
+        stage('Push to DockerHub') {
+            steps {
+                script {
+                    withCredentials([
+                        string(
+                            credentialsId: 'dockerhub',
+                            variable: 'dockerhub'
+                        )
+                    ]) {
+
+                        sh '''
+                            docker login -u vamshi567 -p ${dockerhub}
+
+                            docker push vamshi567/wipro-project:${BUILD_NUMBER}
+                        '''
+                    }
+                }
+            }
+        }
+        stage('Deploy to Kubernetes') {
+            steps {
+                echo 'Deploying application to Kubernetes'
+
+                sh '''
+                    echo "Updating EKS kubeconfig..."
+
+                    aws eks update-kubeconfig \
+                        --name ekswithvamshi1 \
+                        --region ap-south-1
+                    kubectl apply -f deploymentfiles/deploy.yaml
+                '''
+            }
+        }
     }
 }
